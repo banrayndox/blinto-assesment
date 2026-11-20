@@ -31,12 +31,14 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.use("/api/movies", movieRoutes);
+app.use("/movies", movieRoutes);
 app.use("/api/cinemas", cinemaRoutes);
+app.use("/cinemas", cinemaRoutes);
 
 // 404 Handler
 app.use((req, res) => {
