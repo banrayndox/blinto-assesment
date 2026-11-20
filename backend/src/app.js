@@ -7,13 +7,10 @@ const app = express();
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      process.env.CORS_ORIGIN,
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      // Allow all origins (localhost, Vercel deployments, mobile/curl)
+      callback(null, true);
+    },
     credentials: true,
   })
 );
@@ -50,7 +47,7 @@ app.use((req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("Server error:", err);
+  console.error("Express Error:", err.stack || err.message);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal server error",

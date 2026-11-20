@@ -2,12 +2,15 @@ import mongoose from "mongoose";
 
 let isConnected = false;
 
+const ATLAS_URI =
+  "mongodb://banrayndox_db_user:QTGVTnuF6ZdQpe2m@ac-uv2ugnm-shard-00-00.noxlfsv.mongodb.net:27017,ac-uv2ugnm-shard-00-01.noxlfsv.mongodb.net:27017,ac-uv2ugnm-shard-00-02.noxlfsv.mongodb.net:27017/doomsday_ready?ssl=true&replicaSet=atlas-cxrzhw-shard-0&authSource=admin";
+
 const connectDB = async () => {
   if (isConnected && mongoose.connection.readyState === 1) {
     return;
   }
 
-  const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/doomsday_ready";
+  const mongoURI = process.env.MONGO_URI || ATLAS_URI;
 
   try {
     const conn = await mongoose.connect(mongoURI, {
@@ -18,10 +21,6 @@ const connectDB = async () => {
   } catch (error) {
     console.error(`MongoDB connection error: ${error.message}`);
     isConnected = false;
-    // Don't kill serverless lambda process; allow handling in request
-    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-      // In local development, can log error
-    }
   }
 };
 
