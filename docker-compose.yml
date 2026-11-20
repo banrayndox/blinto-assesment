@@ -19,7 +19,7 @@ services:
     environment:
       - PORT=5000
       - MONGO_URI=mongodb://mongodb:27017/doomsday_ready
-      - CORS_ORIGIN=http://localhost:5173
+      - CORS_ORIGIN=http://localhost:3000
     depends_on:
       - mongodb
 
@@ -28,7 +28,7 @@ services:
     container_name: doomsday-frontend
     restart: always
     ports:
-      - "5173:80"
+      - "3000:80"
     depends_on:
       - backend
 
