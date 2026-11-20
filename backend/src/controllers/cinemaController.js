@@ -190,7 +190,6 @@ export const deleteCinema = async (req, res) => {
     });
   }
 };
-
 export const getBookingQuote = async (req, res) => {
   try {
     const { id } = req.params;
@@ -203,13 +202,9 @@ export const getBookingQuote = async (req, res) => {
       });
     }
 
-    const parsedGroupSize = Number(groupSize);
+    const target = Number(groupSize);
 
-    if (
-      !Number.isInteger(parsedGroupSize) ||
-      parsedGroupSize < 1 ||
-      parsedGroupSize > 10000
-    ) {
+    if (!Number.isInteger(target) || target < 1 || target > 10000) {
       return res.status(400).json({
         success: false,
         message: "Group size must be an integer between 1 and 10,000",
@@ -226,28 +221,36 @@ export const getBookingQuote = async (req, res) => {
     }
 
     const bundleSizes = cinema.bundleSizes;
-    const target = parsedGroupSize;
+
+    let current = [];
+    let best = [];
+    let minBundles = Infinity;
 
     function solve(remaining) {
-      if (remaining === 0) return 0;
-      if (remaining < 0) return Infinity;
-
-      let minBundles = Infinity;
-
-      for (let bundle of bundleSizes) {
-        let result = solve(remaining - bundle);
-
-        if (result !== Infinity) {
-          minBundles = Math.min(minBundles, result + 1);
+      if (remaining === 0) {
+        if (current.length < minBundles) {
+          minBundles = current.length;
+          best = [...current];
         }
+        return;
       }
 
-      return minBundles;
+      if (remaining < 0 || current.length >= minBundles) {
+        return;
+      }
+
+      for (let bundle of bundleSizes) {
+        current.push(bundle);
+
+        solve(remaining - bundle);
+
+        current.pop();
+      }
     }
 
-    const totalBundles = solve(target);
+    solve(target);
 
-    if (totalBundles === Infinity) {
+    if (minBundles === Infinity) {
       return res.status(200).json({
         success: true,
         possible: false,
@@ -257,45 +260,14 @@ export const getBookingQuote = async (req, res) => {
       });
     }
 
-    let remaining = target;
-    let breakdown = [];
-
-    while (remaining > 0) {
-      for (let bundle of bundleSizes) {
-        if (
-          bundle <= remaining &&
-          solve(remaining - bundle) + 1 === solve(remaining)
-        ) {
-          let existing = breakdown.find((item) => item.size === bundle);
-
-          if (existing) {
-            existing.count++;
-          } else {
-            breakdown.push({
-              size: bundle,
-              count: 1,
-            });
-          }
-
-          remaining -= bundle;
-          break;
-        }
-      }
-    }
-
-    const totalSeats = breakdown.reduce(
-      (sum, item) => sum + item.size * item.count,
-      0
-    );
-
     return res.status(200).json({
       success: true,
       possible: true,
       groupSize: target,
       cinema: cinema.name,
-      totalBundles,
-      totalSeats,
-      breakdown,
+      totalBundles: minBundles,
+      totalSeats: target,
+      bundles: best,
     });
   } catch (error) {
     return res.status(500).json({

@@ -319,7 +319,17 @@ const BookingPage = () => {
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {(quoteResult.breakdown || []).map((b, idx) => (
+                  {(
+                    quoteResult.breakdown ||
+                    (quoteResult.bundles
+                      ? Object.entries(
+                          quoteResult.bundles.reduce((acc, size) => {
+                            acc[size] = (acc[size] || 0) + 1;
+                            return acc;
+                          }, {})
+                        ).map(([size, count]) => ({ size: Number(size), count }))
+                      : [])
+                  ).map((b, idx) => (
                     <div
                       key={idx}
                       className="p-3.5 rounded-lg bg-white/[0.03] border border-white/10 flex items-center justify-between"

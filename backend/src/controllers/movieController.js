@@ -1,5 +1,7 @@
+
 import Movie from "../models/Movie.js";
 import mongoose from "mongoose";
+
 export const createMovie = async (req, res) => {
   try {
     const { title, releaseYear, runtime, prerequisites, watched } = req.body;
@@ -28,13 +30,6 @@ export const createMovie = async (req, res) => {
         message: "A movie with this title already exists",
       });
     }
-
-    // =========================================================================
-    // FEATURE 1 HOOK: Circular Dependency Detection
-    // Note: Circular dependency detection algorithm is reserved for author implementation.
-    // When implementing: reject any cycle with:
-    // return res.status(409).json({ success: false, code: "CIRCULAR_DEPENDENCY", message: "Circular dependency detected" });
-    // =========================================================================
 
     const movie = await Movie.create({
       title: title.trim(),
@@ -171,34 +166,35 @@ export const updateMovie = async (req, res) => {
 
       const movies = await Movie.find();
 
-      const graph = new Map();
-
-      for (const item of movies) {
-        graph.set(item._id.toString(), item.prerequisites.map((p) => p.toString()));
-      }
-
-      graph.set(
-        id.toString(),
-        prerequisites.map((p) => p.toString())
-      );
-
-      const visited = new Set();
-      const path = new Set();
-
-      function dfs(movieId) {
-        if (path.has(movieId)) {
+      function hasCycle(movieId, targetId, path = new Set()) {
+        if (movieId === targetId) {
           return true;
         }
 
-        if (visited.has(movieId)) {
+        if (path.has(movieId)) {
           return false;
         }
 
-        visited.add(movieId);
         path.add(movieId);
 
-        for (const prerequisiteId of graph.get(movieId) || []) {
-          if (dfs(prerequisiteId)) {
+        const currentMovie = movies.find(
+          (item) => item._id.toString() === movieId
+        );
+
+        if (!currentMovie) {
+          path.delete(movieId);
+          return false;
+        }
+
+        for (const prerequisiteId of currentMovie.prerequisites) {
+          if (
+            hasCycle(
+              prerequisiteId.toString(),
+              targetId,
+              path
+            )
+          ) {
+            path.delete(movieId);
             return true;
           }
         }
@@ -207,8 +203,13 @@ export const updateMovie = async (req, res) => {
         return false;
       }
 
-      for (const movieId of graph.keys()) {
-        if (dfs(movieId)) {
+      for (const prerequisiteId of prerequisites) {
+        if (
+          hasCycle(
+            prerequisiteId.toString(),
+            id.toString()
+          )
+        ) {
           return res.status(409).json({
             success: false,
             code: "CIRCULAR_DEPENDENCY",
@@ -239,11 +240,13 @@ export const updateMovie = async (req, res) => {
     });
   }
 };
+
 export const deleteMovie = async (req, res) => {
   try {
     const { id } = req.params;
 
     const movie = await Movie.findByIdAndDelete(id);
+
     if (!movie) {
       return res.status(404).json({
         success: false,
@@ -251,7 +254,6 @@ export const deleteMovie = async (req, res) => {
       });
     }
 
-    // Remove this movie from any prerequisite lists
     await Movie.updateMany(
       { prerequisites: id },
       { $pull: { prerequisites: id } }
@@ -268,7 +270,6 @@ export const deleteMovie = async (req, res) => {
     });
   }
 };
-
 
 export const getRewatchOrder = async (req, res) => {
   try {
@@ -292,75 +293,10 @@ export const getRewatchOrder = async (req, res) => {
 
     const movies = await Movie.find();
 
-    const graph = new Map();
-    const movieMap = new Map();
-
-    for (const movie of movies) {
-      const movieId = movie._id.toString();
-
-      graph.set(movieId, []);
-      movieMap.set(movieId, movie);
-    }
-
-    for (const movie of movies) {
-      const movieId = movie._id.toString();
-
-      for (const prerequisiteId of movie.prerequisites) {
-        const prerequisiteIdString = prerequisiteId.toString();
-
-        if (graph.has(prerequisiteIdString)) {
-          graph.get(prerequisiteIdString).push(movieId);
-        }
-      }
-    }
-
     const visited = new Set();
     const path = new Set();
     const order = [];
     let hasCycle = false;
-
-    function dfs(movieId) {
-      if (path.has(movieId)) {
-        hasCycle = true;
-        return;
-      }
-
-      if (visited.has(movieId)) {
-        return;
-      }
-
-      path.add(movieId);
-
-      for (const nextMovieId of graph.get(movieId) || []) {
-        dfs(nextMovieId);
-      }
-
-      path.delete(movieId);
-      visited.add(movieId);
-
-      order.push(movieMap.get(movieId));
-    }
-
-    const targetId = targetMovie._id.toString();
-
-
-    const reverseGraph = new Map();
-
-    for (const movie of movies) {
-      reverseGraph.set(movie._id.toString(), []);
-    }
-
-    for (const movie of movies) {
-      const movieId = movie._id.toString();
-
-      for (const prerequisiteId of movie.prerequisites) {
-        const prerequisiteIdString = prerequisiteId.toString();
-
-        if (reverseGraph.has(movieId)) {
-          reverseGraph.get(movieId).push(prerequisiteIdString);
-        }
-      }
-    }
 
     function getPrerequisites(movieId) {
       if (path.has(movieId)) {
@@ -374,17 +310,25 @@ export const getRewatchOrder = async (req, res) => {
 
       path.add(movieId);
 
-      for (const prerequisiteId of reverseGraph.get(movieId) || []) {
-        getPrerequisites(prerequisiteId);
+      const movie = movies.find(
+        (item) => item._id.toString() === movieId
+      );
+
+      if (!movie) {
+        path.delete(movieId);
+        return;
+      }
+
+      for (const prerequisiteId of movie.prerequisites) {
+        getPrerequisites(prerequisiteId.toString());
       }
 
       path.delete(movieId);
       visited.add(movieId);
-
-      order.push(movieMap.get(movieId));
+      order.push(movie);
     }
 
-    getPrerequisites(targetId);
+    getPrerequisites(targetMovie._id.toString());
 
     if (hasCycle) {
       return res.status(200).json({
@@ -399,7 +343,7 @@ export const getRewatchOrder = async (req, res) => {
       .filter(
         (movie) =>
           !movie.watched ||
-          movie._id.toString() === targetId
+          movie._id.toString() === targetMovie._id.toString()
       )
       .map((movie) => ({
         _id: movie._id,
