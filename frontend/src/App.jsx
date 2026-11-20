@@ -55,17 +55,11 @@ const App = () => {
 
         {/* Footer */}
         <footer className="border-t border-white/10 bg-[#07080B] py-6 text-center text-xs text-gray-500 font-mono">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div>
+
               <span className="text-gray-400 font-semibold uppercase">Doomsday Ready</span>{" "}
-              — Blinto Full-Stack Assessment
-            </div>
-            <div className="flex items-center gap-4 text-[11px]">
-              <span>MCU Phase 6 Protocol</span>
-              <span>•</span>
-              <span>Node.js / Express / MongoDB / React</span>
-            </div>
-          </div>
+              — Blinto Full-Stack Assessment by Rakib B
+
+
         </footer>
       </div>
     </BrowserRouter>

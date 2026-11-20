@@ -44,9 +44,6 @@ const Navbar = () => {
                 <span className="font-extrabold text-base tracking-wider text-white uppercase">
                   Doomsday <span className="text-red-500">Ready</span>
                 </span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800/60 hidden sm:inline-block">
-                  MCU Phase 6
-                </span>
               </div>
               <p className="text-[10px] text-gray-400 font-mono hidden sm:block">
                 Rewatch Planner & Premiere Booking
@@ -76,13 +73,6 @@ const Navbar = () => {
             })}
           </nav>
 
-          {/* Right badge */}
-          <div className="hidden lg:flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Backend Connected</span>
-            </div>
-          </div>
 
           {/* Mobile hamburger */}
           <div className="md:hidden flex items-center">

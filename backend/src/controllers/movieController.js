@@ -1,5 +1,5 @@
 import Movie from "../models/Movie.js";
-
+import mongoose from "mongoose";
 export const createMovie = async (req, res) => {
   try {
     const { title, releaseYear, runtime, prerequisites, watched } = req.body;
@@ -113,6 +113,7 @@ export const updateMovie = async (req, res) => {
     const { title, releaseYear, runtime, prerequisites, watched } = req.body;
 
     const movie = await Movie.findById(id);
+
     if (!movie) {
       return res.status(404).json({
         success: false,
@@ -125,12 +126,14 @@ export const updateMovie = async (req, res) => {
         _id: { $ne: id },
         title: { $regex: new RegExp(`^${title.trim()}$`, "i") },
       });
+
       if (existing) {
         return res.status(400).json({
           success: false,
           message: "A movie with this title already exists",
         });
       }
+
       movie.title = title.trim();
     }
 
@@ -145,6 +148,7 @@ export const updateMovie = async (req, res) => {
           message: "Runtime must be between 1 and 300 minutes",
         });
       }
+
       movie.runtime = Number(runtime);
     }
 
@@ -153,10 +157,10 @@ export const updateMovie = async (req, res) => {
     }
 
     if (prerequisites !== undefined) {
-      // Prevent direct self-prerequisite check
       const selfIncluded = prerequisites.some(
         (p) => p.toString() === id.toString()
       );
+
       if (selfIncluded) {
         return res.status(409).json({
           success: false,
@@ -165,13 +169,53 @@ export const updateMovie = async (req, res) => {
         });
       }
 
-      // =========================================================================
-      // FEATURE 1 HOOK: Circular Dependency Detection
-      // Note: General circular dependency graph traversal logic is reserved for
-      // author implementation.
-      // When implementing: reject any prerequisite cycle with:
-      // return res.status(409).json({ success: false, code: "CIRCULAR_DEPENDENCY", message: "Circular dependency detected" });
-      // =========================================================================
+      const movies = await Movie.find();
+
+      const graph = new Map();
+
+      for (const item of movies) {
+        graph.set(item._id.toString(), item.prerequisites.map((p) => p.toString()));
+      }
+
+      graph.set(
+        id.toString(),
+        prerequisites.map((p) => p.toString())
+      );
+
+      const visited = new Set();
+      const path = new Set();
+
+      function dfs(movieId) {
+        if (path.has(movieId)) {
+          return true;
+        }
+
+        if (visited.has(movieId)) {
+          return false;
+        }
+
+        visited.add(movieId);
+        path.add(movieId);
+
+        for (const prerequisiteId of graph.get(movieId) || []) {
+          if (dfs(prerequisiteId)) {
+            return true;
+          }
+        }
+
+        path.delete(movieId);
+        return false;
+      }
+
+      for (const movieId of graph.keys()) {
+        if (dfs(movieId)) {
+          return res.status(409).json({
+            success: false,
+            code: "CIRCULAR_DEPENDENCY",
+            message: "Circular dependency detected",
+          });
+        }
+      }
 
       movie.prerequisites = prerequisites;
     }
@@ -195,7 +239,6 @@ export const updateMovie = async (req, res) => {
     });
   }
 };
-
 export const deleteMovie = async (req, res) => {
   try {
     const { id } = req.params;
@@ -226,42 +269,158 @@ export const deleteMovie = async (req, res) => {
   }
 };
 
+
 export const getRewatchOrder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const movie = await Movie.findById(id).populate(
-      "prerequisites",
-      "title releaseYear runtime watched"
-    );
-
-    if (!movie) {
-      return res.status(404).json({
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
         success: false,
-        message: "Target movie not found",
+        message: "Invalid movie ID",
       });
     }
 
-    // =========================================================================
-    // FEATURE 1: Rewatch Order Algorithm
-    // The algorithm implementation (topological sort, dependency graph traversal,
-    // circular dependency check, watched count calculation, and remaining runtime)
-    // is reserved for the author to implement.
-    // =========================================================================
+    const targetMovie = await Movie.findById(id);
 
-    return res.status(501).json({
-      success: false,
-      algorithmPending: true,
-      message:
-        "Rewatch order calculation algorithm has not been implemented yet. Reserved for author implementation.",
-      targetMovie: {
+    if (!targetMovie) {
+      return res.status(404).json({
+        success: false,
+        message: "Movie not found",
+      });
+    }
+
+    const movies = await Movie.find();
+
+    const graph = new Map();
+    const movieMap = new Map();
+
+    for (const movie of movies) {
+      const movieId = movie._id.toString();
+
+      graph.set(movieId, []);
+      movieMap.set(movieId, movie);
+    }
+
+    for (const movie of movies) {
+      const movieId = movie._id.toString();
+
+      for (const prerequisiteId of movie.prerequisites) {
+        const prerequisiteIdString = prerequisiteId.toString();
+
+        if (graph.has(prerequisiteIdString)) {
+          graph.get(prerequisiteIdString).push(movieId);
+        }
+      }
+    }
+
+    const visited = new Set();
+    const path = new Set();
+    const order = [];
+    let hasCycle = false;
+
+    function dfs(movieId) {
+      if (path.has(movieId)) {
+        hasCycle = true;
+        return;
+      }
+
+      if (visited.has(movieId)) {
+        return;
+      }
+
+      path.add(movieId);
+
+      for (const nextMovieId of graph.get(movieId) || []) {
+        dfs(nextMovieId);
+      }
+
+      path.delete(movieId);
+      visited.add(movieId);
+
+      order.push(movieMap.get(movieId));
+    }
+
+    const targetId = targetMovie._id.toString();
+
+
+    const reverseGraph = new Map();
+
+    for (const movie of movies) {
+      reverseGraph.set(movie._id.toString(), []);
+    }
+
+    for (const movie of movies) {
+      const movieId = movie._id.toString();
+
+      for (const prerequisiteId of movie.prerequisites) {
+        const prerequisiteIdString = prerequisiteId.toString();
+
+        if (reverseGraph.has(movieId)) {
+          reverseGraph.get(movieId).push(prerequisiteIdString);
+        }
+      }
+    }
+
+    function getPrerequisites(movieId) {
+      if (path.has(movieId)) {
+        hasCycle = true;
+        return;
+      }
+
+      if (visited.has(movieId)) {
+        return;
+      }
+
+      path.add(movieId);
+
+      for (const prerequisiteId of reverseGraph.get(movieId) || []) {
+        getPrerequisites(prerequisiteId);
+      }
+
+      path.delete(movieId);
+      visited.add(movieId);
+
+      order.push(movieMap.get(movieId));
+    }
+
+    getPrerequisites(targetId);
+
+    if (hasCycle) {
+      return res.status(200).json({
+        success: true,
+        possible: false,
+        message: "Circular dependency detected",
+        movie: targetMovie.title,
+      });
+    }
+
+    const rewatchOrder = order
+      .filter(
+        (movie) =>
+          !movie.watched ||
+          movie._id.toString() === targetId
+      )
+      .map((movie) => ({
         _id: movie._id,
         title: movie.title,
         releaseYear: movie.releaseYear,
         runtime: movie.runtime,
         watched: movie.watched,
-        prerequisites: movie.prerequisites,
-      },
+      }));
+
+    const totalRuntime = rewatchOrder.reduce(
+      (sum, movie) => sum + movie.runtime,
+      0
+    );
+
+    return res.status(200).json({
+      success: true,
+      possible: true,
+      targetMovie: targetMovie.title,
+      rewatchOrder,
+      totalMovies: rewatchOrder.length,
+      totalRuntime,
     });
   } catch (error) {
     return res.status(500).json({

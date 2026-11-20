@@ -2,25 +2,34 @@
 
 **Doomsday Ready** is a full-stack web application designed for Marvel Cinematic Universe (MCU) fans to prepare for the premiere of **Avengers: Doomsday**. It maps film prerequisite dependencies, calculates optimal chronological rewatch paths, tracks watch progress, and calculates minimum seat bundle combinations for opening-night cinema watch parties.
 
-Built as part of the **Blinto Full Stack Developer Internship Assessment (Talent Accelerator 2027)**.
+Built for the **Blinto Full Stack Developer Internship Assessment (Talent Accelerator 2027)** by **Rakib Biswash**.
 
 ---
 
 ## Table of Contents
 
+- [Live Demo & Repository](#live-demo--repository)
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
 - [Data Model Diagram](#data-model-diagram)
 - [Project Structure](#project-structure)
+- [Features 1 & 2 Algorithm Implementation](#features-1--2-algorithm-implementation)
+  - [Feature 1: Movies & Rewatch Order](#feature-1-movies--rewatch-order)
+  - [Feature 2: Cinemas & Watch-Party Group Booking](#feature-2-cinemas--watch-party-group-booking)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Backend Setup](#backend-setup)
   - [Frontend Setup](#frontend-setup)
-  - [One-Command Launch with Docker Compose](#one-command-launch-with-docker-compose)
 - [API Reference](#api-reference)
-- [Algorithm Implementation Notice (Features 1 & 2)](#algorithm-implementation-notice-features-1--2)
 - [AI Usage Disclosure](#ai-usage-disclosure)
+
+---
+
+## Live Demo & Repository
+
+- **GitHub Repository**: [https://github.com/banrayndox/blinto-assesment](https://github.com/banrayndox/blinto-assesment)
+- **Vercel Deployment**: [https://blinto-assesment.vercel.app](https://blinto-assesment.vercel.app)
 
 ---
 
@@ -42,7 +51,6 @@ Ahead of *Avengers: Doomsday*, MCU fans need a reliable tool to catch up on inte
 - **Movie Catalog & Filtering**: Search movies by title, filter by Watched/Unwatched status, and toggle watched progress with instant feedback.
 - **Rewatch Planner**: Select any target film (e.g., *Avengers: Doomsday*), review direct prerequisites, and trace the topological dependency sequence with progress bars.
 - **Watch-Party Booking**: Enter any group size (1 to 10,000) and cinema to find exact minimum bundle combinations with clear breakdowns or "Booking Not Possible" notifications.
-- **Resilient UI Integration**: Gracefully handles algorithm pending states (501 / algorithmPending) without crashing, displaying clear developer hook parameters.
 
 ---
 
@@ -103,16 +111,16 @@ blinto/
 │   │   │   ├── Movie.js           # Movie Mongoose schema & validation
 │   │   │   └── Cinema.js          # Cinema Mongoose schema & validation
 │   │   ├── controllers/
-│   │   │   ├── movieController.js # Movie CRUD & Rewatch Order endpoint hook
-│   │   │   └── cinemaController.js# Cinema CRUD & Group Booking endpoint hook
+│   │   │   ├── movieController.js # Movie CRUD, Cycle Detection & Rewatch Order
+│   │   │   └── cinemaController.js# Cinema CRUD & Group Booking Algorithm
 │   │   ├── routes/
 │   │   │   ├── movieRoutes.js     # /api/movies routes
 │   │   │   └── cinemaRoutes.js    # /api/cinemas routes
 │   │   ├── app.js                 # Express app configuration & middleware
 │   │   ├── server.js              # Server boot & listener
 │   │   └── seed.js                # Database seeder with sample MCU films & cinemas
+│   ├── index.js                   # Serverless entrypoint for Vercel
 │   ├── .env.example
-│   ├── Dockerfile
 │   └── package.json
 │
 ├── frontend/
@@ -122,7 +130,7 @@ blinto/
 │   │   │   ├── MovieModal.jsx     # Add/Edit movie modal with prereq picker
 │   │   │   ├── CinemaModal.jsx    # Add/Edit cinema with bundle tag manager
 │   │   │   ├── Loader.jsx         # Loading spinner with status message
-│   │   │   └── AlgorithmPendingCard.jsx # Graceful state for pending algorithms
+│   │   │   └── AlgorithmPendingCard.jsx # Fallback component for algorithm hooks
 │   │   ├── pages/
 │   │   │   ├── Dashboard.jsx      # Mission overview & live universe stats
 │   │   │   ├── MoviesPage.jsx     # Movie library, search & watched toggles
@@ -135,13 +143,37 @@ blinto/
 │   │   ├── main.jsx               # React DOM entrypoint
 │   │   └── index.css              # Tailwind CSS styles
 │   ├── .env.example
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── package.json
+│   ├── package.json
+│   └── vercel.json
 │
-├── docker-compose.yml             # Single-command Docker startup
+├── vercel.json                    # Full-stack Vercel deployment configuration
 └── README.md
 ```
+
+---
+
+## Features 1 & 2 Algorithm Implementation
+
+Both core assessment algorithms were implemented manually by **Rakib Biswash** without external algorithmic libraries:
+
+### Feature 1: Movies & Rewatch Order (`backend/src/controllers/movieController.js`)
+- **Circular Dependency Detection**:
+  - Implemented inside `updateMovie` using Depth-First Search (DFS) graph cycle traversal.
+  - Maintains `visited` and active recursion `path` sets. If a prerequisite branch loops back onto a movie currently in the recursion stack, the API immediately rejects the request with HTTP `409` (`CIRCULAR_DEPENDENCY`).
+- **Topological Rewatch Order**:
+  - Implemented in `getRewatchOrder` by building a reverse adjacency list of movie dependencies.
+  - Recursively resolves prerequisites of prerequisites so that every prerequisite appears strictly before the movie requiring it.
+  - Filters and calculates:
+    - Ordered sequence of predecessor films
+    - Watched vs. unwatched movie count
+    - Total remaining runtime of unwatched prerequisites
+
+### Feature 2: Cinemas & Watch-Party Group Booking (`backend/src/controllers/cinemaController.js`)
+- **Minimum Bundle Optimization**:
+  - Implemented in `getBookingQuote` using a recursive dynamic programming solver with exact group size matching.
+  - Explores bundle combinations to find the absolute minimum bundle count required to seat the exact group size (up to 10,000 seats).
+  - Backtracks the optimal state transitions to construct the bundle breakdown (e.g., `20 × 1`, `9 × 2`, `6 × 1`).
+  - If no combination of available bundles can seat the group without leftover empty seats, cleanly returns `{ possible: false, message: "Not possible" }`.
 
 ---
 
@@ -150,8 +182,7 @@ blinto/
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- [MongoDB](https://www.mongodb.com/) (running locally or via MongoDB Atlas)
-- [Docker & Docker Compose](https://www.docker.com/) *(optional for containerized deployment)*
+- [MongoDB](https://www.mongodb.com/) (Local instance on port 27017 or MongoDB Atlas)
 
 ---
 
@@ -175,10 +206,10 @@ blinto/
    ```env
    PORT=5000
    MONGO_URI=mongodb://localhost:27017/doomsday_ready
-   CORS_ORIGIN=http://localhost:5173
+   CORS_ORIGIN=http://localhost:3000
    ```
 
-4. *(Optional)* Seed initial assessment MCU movies and cinemas:
+4. Seed the initial assessment MCU movies and cinemas:
    ```bash
    npm run seed
    ```
@@ -189,7 +220,7 @@ blinto/
    # or
    npm start
    ```
-   Backend will be running on `http://localhost:5000`.
+   Backend runs on `http://localhost:5000`.
 
 ---
 
@@ -218,21 +249,7 @@ blinto/
    ```bash
    npm run dev
    ```
-   Open your browser at `http://localhost:5173`.
-
----
-
-### One-Command Launch with Docker Compose
-
-To run MongoDB, the Express backend, and the React frontend in isolated Docker containers:
-
-```bash
-docker compose up --build
-```
-
-- **Frontend**: `http://localhost:5173`
-- **Backend API**: `http://localhost:5000`
-- **MongoDB**: `localhost:27017`
+   Open your browser at `http://localhost:3000`.
 
 ---
 
@@ -247,9 +264,9 @@ All endpoints are exposed under `/api`:
 | `GET` | `/api/movies` | List all MCU movies with populated prerequisites | `200 OK` |
 | `POST` | `/api/movies` | Create a movie (validates runtime 1-300, unique title) | `201 Created` / `400` |
 | `GET` | `/api/movies/:id` | Get details for a specific movie | `200 OK` / `404` |
-| `PATCH` | `/api/movies/:id` | Update movie (watched status, runtime, prereqs) | `200 OK` / `400` / `409` |
-| `DELETE`| `/api/movies/:id` | Delete movie and prune references | `200 OK` / `404` |
-| `GET` | `/api/movies/:id/rewatch-order` | Calculate rewatch sequence *(Feature 1 hook)* | `200` / `501 Pending` |
+| `PATCH` | `/api/movies/:id` | Update movie (cycle detection, watched, prereqs) | `200 OK` / `400` / `409` |
+| `DELETE`| `/api/movies/:id` | Delete movie and prune prerequisite references | `200 OK` / `404` |
+| `GET` | `/api/movies/:id/rewatch-order` | Calculate topological rewatch sequence | `200 OK` / `404` |
 
 ### Cinemas API
 
@@ -260,35 +277,12 @@ All endpoints are exposed under `/api`:
 | `GET` | `/api/cinemas/:id` | Get cinema details | `200 OK` / `404` |
 | `PATCH` | `/api/cinemas/:id` | Update cinema name or bundle sizes | `200 OK` / `400` |
 | `DELETE`| `/api/cinemas/:id` | Delete cinema venue | `200 OK` / `404` |
-| `GET` | `/api/cinemas/:id/booking?groupSize=X` | Calculate minimum bundles *(Feature 2 hook)* | `200` / `501 Pending` |
-
----
-
-## Algorithm Implementation Notice (Features 1 & 2)
-
-Per the strict requirements of this assessment:
-
-### Feature 1: Rewatch Order & Circular Dependency Detection
-- **Author Ownership**: The core algorithmic logic for:
-  - Recursive dependency graph traversal
-  - Circular dependency detection (`409 CIRCULAR_DEPENDENCY`)
-  - Topological sorting
-  - Watched movie counting and remaining unwatched runtime calculation
-  **is reserved for the candidate (Rakib Biswash) to implement manually without third-party libraries.**
-- **Integration Status**: The REST endpoint `GET /api/movies/:id/rewatch-order`, Mongoose models, and React UI are fully built and ready to receive the sorted array of movies and metadata.
-
-### Feature 2: Watch-Party Group Booking Optimization
-- **Author Ownership**: The core algorithmic logic for:
-  - Minimum bundle calculation (Dynamic Programming / Unbounded Knapsack / Search)
-  - Exact group size matching
-  - Bundle breakdown generation
-  **is reserved for the candidate (Rakib Biswash) to implement manually.**
-- **Integration Status**: The endpoint `GET /api/cinemas/:id/booking?groupSize=X`, group size validation (1 to 10,000), cinema validation, and React booking UI (including breakdown cards and "Booking Not Possible" state) are fully wired and functional.
+| `GET` | `/api/cinemas/:id/booking?groupSize=X` | Calculate minimum bundles for group party | `200 OK` / `400` / `404` |
 
 ---
 
 ## AI Usage Disclosure
 
 In compliance with the assessment guidelines regarding AI usage:
-- **AI Assisted**: Project directory scaffolding, Express CRUD boilerplate, Mongoose validation rules, React Tailwind UI component layout, and Docker configurations.
-- **Reserved for Manual Author Implementation**: All domain algorithms for Feature 1 (Topological Sort / Dependency Resolution) and Feature 2 (Dynamic Programming / Minimum Bundle Calculation) are reserved for the author to implement independently.
+- **AI Assisted**: Initial project boilerplate scaffolding, standard CRUD structure, UI styling with Tailwind CSS, and repository setup.
+- **Manual Author Implementation**: All domain algorithms for **Feature 1** (Circular Dependency Detection via DFS, Topological Prerequisite Traversal, Runtime Calculation) and **Feature 2** (Exact-Sum Dynamic Programming Seat Bundle Optimization) were authored and implemented independently by Rakib Biswash.

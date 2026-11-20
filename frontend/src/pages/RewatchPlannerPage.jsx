@@ -1,12 +1,11 @@
+
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   FaRoute,
   FaFilm,
   FaCheckCircle,
-  FaClock,
   FaPlay,
-  FaExclamationTriangle,
   FaListOl,
 } from "react-icons/fa";
 import api from "../helper/api";
@@ -22,29 +21,29 @@ const RewatchPlannerPage = () => {
   const [selectedMovieId, setSelectedMovieId] = useState("");
   const [loadingMovies, setLoadingMovies] = useState(true);
 
-  // Rewatch order states
   const [calculating, setCalculating] = useState(false);
   const [rewatchData, setRewatchData] = useState(null);
   const [isAlgorithmPending, setIsAlgorithmPending] = useState(false);
   const [pendingContext, setPendingContext] = useState(null);
 
-  // Fetch all movies for dropdown
   useEffect(() => {
     const fetchMovies = async () => {
       try {
         setLoadingMovies(true);
+
         const res = await api.get("/movies");
+
         if (res.data.success) {
           const list = res.data.movies || [];
           setMovies(list);
 
-          // Select default: urlMovieId or "Avengers: Doomsday" or first movie
           if (urlMovieId && list.some((m) => m._id === urlMovieId)) {
             setSelectedMovieId(urlMovieId);
           } else {
             const doomsday = list.find((m) =>
               m.title.toLowerCase().includes("doomsday")
             );
+
             if (doomsday) {
               setSelectedMovieId(doomsday._id);
             } else if (list.length > 0) {
@@ -62,7 +61,6 @@ const RewatchPlannerPage = () => {
     fetchMovies();
   }, [urlMovieId]);
 
-  // Trigger rewatch calculation when selectedMovieId changes
   useEffect(() => {
     if (selectedMovieId) {
       calculateRewatchOrder(selectedMovieId);
@@ -78,12 +76,14 @@ const RewatchPlannerPage = () => {
 
       const res = await api.get(`/movies/${movieId}/rewatch-order`);
 
+      console.log(res.data);
+
       if (res.data.success) {
         setRewatchData(res.data);
       }
     } catch (err) {
-      // Check if backend returned 501 / algorithmPending
       const data = err.response?.data;
+
       if (err.response?.status === 501 || data?.algorithmPending) {
         setIsAlgorithmPending(true);
         setPendingContext(data?.targetMovie || null);
@@ -97,22 +97,39 @@ const RewatchPlannerPage = () => {
 
   const selectedMovie = movies.find((m) => m._id === selectedMovieId);
 
+  const rewatchOrder = rewatchData?.rewatchOrder || [];
+
+  const watchedCount = rewatchOrder.filter((movie) => movie.watched).length;
+
+  const totalMovies = rewatchData?.totalMovies || rewatchOrder.length;
+
+  const remainingRuntime = rewatchOrder
+    .filter((movie) => !movie.watched)
+    .reduce((sum, movie) => sum + movie.runtime, 0);
+
+  const progress = totalMovies
+    ? Math.round((watchedCount / totalMovies) * 100)
+    : 0;
+
   const formatRuntime = (mins) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
+
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
   const handleToggleWatchedInList = async (movieItem) => {
     const id = movieItem._id || movieItem.id;
+
     if (!id) return;
+
     try {
       const res = await api.patch(`/movies/${id}`, {
         watched: !movieItem.watched,
       });
+
       if (res.data.success) {
         toast.success(`Updated "${movieItem.title}"`);
-        // Refresh rewatch calculation
         calculateRewatchOrder(selectedMovieId);
       }
     } catch (err) {
@@ -133,21 +150,25 @@ const RewatchPlannerPage = () => {
             <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-500">
               <FaRoute />
             </div>
+
             <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white">
               Doomsday Rewatch Planner
             </h1>
           </div>
+
           <p className="mt-1 text-xs text-gray-400">
-            Select a target MCU movie to trace its prerequisite dependency tree in optimal watch order.
+            Select a target MCU movie to trace its prerequisite dependency tree in
+            optimal watch order.
           </p>
         </div>
       </div>
 
-      {/* Target Movie Selector Bar */}
+      {/* Target Movie Selector */}
       <div className="rounded-xl border border-white/10 bg-[#12141D] p-5 shadow-lg">
         <label className="block text-xs font-mono uppercase text-gray-400 mb-2">
           Select Target MCU Film:
         </label>
+
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <select
             value={selectedMovieId}
@@ -155,7 +176,11 @@ const RewatchPlannerPage = () => {
             className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3.5 py-2.5 text-sm text-white focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
           >
             {movies.map((m) => (
-              <option key={m._id} value={m._id} className="bg-[#12141D] text-white">
+              <option
+                key={m._id}
+                value={m._id}
+                className="bg-[#12141D] text-white"
+              >
                 {m.title} ({m.releaseYear}) — {m.runtime} mins
               </option>
             ))}
@@ -163,7 +188,7 @@ const RewatchPlannerPage = () => {
 
           <button
             onClick={() => calculateRewatchOrder(selectedMovieId)}
-            disabled={calculating}
+            disabled={calculating || !selectedMovieId}
             className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold uppercase tracking-wider shadow-lg shadow-red-900/30 transition disabled:opacity-50 cursor-pointer"
           >
             <FaPlay className="text-[10px]" />
@@ -175,13 +200,18 @@ const RewatchPlannerPage = () => {
           <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center gap-4 text-xs font-mono text-gray-400">
             <span className="flex items-center gap-1.5 text-white">
               <FaFilm className="text-red-500" />
-              Target: <strong className="text-white font-sans">{selectedMovie.title}</strong>
+              Target:{" "}
+              <strong className="text-white font-sans">
+                {selectedMovie.title}
+              </strong>
             </span>
+
             <span>•</span>
             <span>Year: {selectedMovie.releaseYear}</span>
             <span>•</span>
             <span>Runtime: {selectedMovie.runtime}m</span>
             <span>•</span>
+
             <span>
               Direct Prereqs:{" "}
               <strong className="text-red-400">
@@ -192,11 +222,10 @@ const RewatchPlannerPage = () => {
         )}
       </div>
 
-      {/* Main Results Container */}
+      {/* Results */}
       {calculating ? (
         <Loader message="Querying GET /api/movies/:id/rewatch-order..." />
       ) : isAlgorithmPending ? (
-        /* Graceful Algorithm Pending UI */
         <AlgorithmPendingCard
           title="Rewatch Order & Dependency Graph Traversal"
           featureNumber="1"
@@ -212,23 +241,22 @@ const RewatchPlannerPage = () => {
   "movies": [
     { "title": "Iron Man", "releaseYear": 2008, "runtime": 126, "watched": true },
     { "title": "Captain America: The First Avenger", "releaseYear": 2011, "runtime": 124, "watched": true },
-    { "title": "The Avengers", "releaseYear": 2012, "runtime": 143, "watched": true },
-    ...
+    { "title": "The Avengers", "releaseYear": 2012, "runtime": 143, "watched": true }
   ]
 }`}
           onRetry={() => calculateRewatchOrder(selectedMovieId)}
         />
       ) : rewatchData ? (
-        /* Implemented Algorithm Output Display */
         <div className="space-y-6">
-          {/* Summary Progress Cards */}
+          {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="rounded-xl border border-white/10 bg-[#12141D] p-5">
               <span className="text-xs font-mono uppercase text-gray-400">
                 Prerequisites Required
               </span>
+
               <div className="mt-2 text-2xl font-extrabold text-white">
-                {rewatchData.movies?.length || rewatchData.totalMovies || 0} films
+                {totalMovies} films
               </div>
             </div>
 
@@ -236,24 +264,15 @@ const RewatchPlannerPage = () => {
               <span className="text-xs font-mono uppercase text-gray-400">
                 Watched Progress
               </span>
+
               <div className="mt-2 text-2xl font-extrabold text-emerald-400">
-                {rewatchData.watchedCount || 0} /{" "}
-                {rewatchData.movies?.length || rewatchData.totalMovies || 0} watched
+                {watchedCount} / {totalMovies} watched
               </div>
+
               <div className="w-full bg-white/5 rounded-full h-1.5 mt-2 overflow-hidden">
                 <div
                   className="bg-emerald-500 h-1.5 rounded-full"
-                  style={{
-                    width: `${
-                      rewatchData.movies?.length
-                        ? Math.round(
-                            ((rewatchData.watchedCount || 0) /
-                              rewatchData.movies.length) *
-                              100
-                          )
-                        : 0
-                    }%`,
-                  }}
+                  style={{ width: `${progress}%` }}
                 ></div>
               </div>
             </div>
@@ -262,23 +281,25 @@ const RewatchPlannerPage = () => {
               <span className="text-xs font-mono uppercase text-gray-400">
                 Remaining Unwatched Runtime
               </span>
+
               <div className="mt-2 text-2xl font-extrabold text-blue-400">
-                {formatRuntime(rewatchData.remainingRuntime || 0)}
+                {formatRuntime(remainingRuntime)}
               </div>
             </div>
           </div>
 
-          {/* Ordered Timeline List */}
+          {/* Ordered Timeline */}
           <div className="rounded-xl border border-white/10 bg-[#12141D] p-6">
             <div className="flex items-center gap-2 pb-4 border-b border-white/10">
               <FaListOl className="text-red-500" />
+
               <h3 className="text-sm font-bold uppercase tracking-wider text-white">
                 Ordered Rewatch Sequence (Topological Order)
               </h3>
             </div>
 
             <div className="mt-5 space-y-3">
-              {(rewatchData.movies || []).map((m, idx) => (
+              {rewatchOrder.map((m, idx) => (
                 <div
                   key={m._id || idx}
                   className={`flex items-center justify-between p-4 rounded-xl border transition ${
@@ -291,6 +312,7 @@ const RewatchPlannerPage = () => {
                     <div className="w-8 h-8 rounded-full bg-red-950/60 border border-red-700/60 flex items-center justify-center text-xs font-mono font-bold text-red-400 shrink-0">
                       {idx + 1}
                     </div>
+
                     <div>
                       <h4
                         className={`text-sm font-bold ${
@@ -299,6 +321,7 @@ const RewatchPlannerPage = () => {
                       >
                         {m.title}
                       </h4>
+
                       <div className="flex items-center gap-2 text-xs font-mono text-gray-400 mt-0.5">
                         <span>{m.releaseYear}</span>
                         <span>•</span>
@@ -322,6 +345,12 @@ const RewatchPlannerPage = () => {
                   </button>
                 </div>
               ))}
+
+              {rewatchOrder.length === 0 && (
+                <p className="text-center text-sm text-gray-400 py-8">
+                  No movies found in this rewatch order.
+                </p>
+              )}
             </div>
           </div>
         </div>

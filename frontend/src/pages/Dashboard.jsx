@@ -90,10 +90,7 @@ const Dashboard = () => {
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 rounded-full bg-red-600/10 blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/20 border border-red-500/30 text-red-400 text-xs font-mono uppercase tracking-wider mb-3">
-            <FaShieldAlt />
-            <span>Avengers: Doomsday Rewatch Mission</span>
-          </div>
+
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight uppercase">
             Prepare For <span className="text-red-500">Doomsday</span>

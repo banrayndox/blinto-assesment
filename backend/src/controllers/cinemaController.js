@@ -199,13 +199,17 @@ export const getBookingQuote = async (req, res) => {
     if (!groupSize) {
       return res.status(400).json({
         success: false,
-        message: "groupSize query parameter is required (e.g. ?groupSize=6)",
+        message: "groupSize query parameter is required",
       });
     }
 
     const parsedGroupSize = Number(groupSize);
 
-    if (!Number.isInteger(parsedGroupSize) || parsedGroupSize < 1 || parsedGroupSize > 10000) {
+    if (
+      !Number.isInteger(parsedGroupSize) ||
+      parsedGroupSize < 1 ||
+      parsedGroupSize > 10000
+    ) {
       return res.status(400).json({
         success: false,
         message: "Group size must be an integer between 1 and 10,000",
@@ -213,6 +217,7 @@ export const getBookingQuote = async (req, res) => {
     }
 
     const cinema = await Cinema.findById(id);
+
     if (!cinema) {
       return res.status(404).json({
         success: false,
@@ -220,47 +225,77 @@ export const getBookingQuote = async (req, res) => {
       });
     }
 
-    // =========================================================================
-    // FEATURE 2: Booking Combination Algorithm
-    // The algorithm implementation (dynamic programming, minimum bundle search,
-    // exact group size combination, and bundle breakdown) is reserved for the
-    // author to implement.
-    //
-    // Expected result format when implemented:
-    // {
-    //   success: true,
-    //   possible: true,
-    //   groupSize: parsedGroupSize,
-    //   cinema: cinema.name,
-    //   totalBundles: 4,
-    //   totalSeats: 44,
-    //   breakdown: [
-    //     { size: 20, count: 1 },
-    //     { size: 9, count: 2 },
-    //     { size: 6, count: 1 }
-    //   ]
-    // }
-    // Or if no exact combination exists:
-    // {
-    //   success: true,
-    //   possible: false,
-    //   message: "Not possible",
-    //   groupSize: parsedGroupSize,
-    //   cinema: cinema.name
-    // }
-    // =========================================================================
+    const bundleSizes = cinema.bundleSizes;
+    const target = parsedGroupSize;
 
-    return res.status(501).json({
-      success: false,
-      algorithmPending: true,
-      message:
-        "Group booking combination algorithm has not been implemented yet. Reserved for author implementation.",
-      cinema: {
-        _id: cinema._id,
-        name: cinema.name,
-        bundleSizes: cinema.bundleSizes,
-      },
-      groupSize: parsedGroupSize,
+    function solve(remaining) {
+      if (remaining === 0) return 0;
+      if (remaining < 0) return Infinity;
+
+      let minBundles = Infinity;
+
+      for (let bundle of bundleSizes) {
+        let result = solve(remaining - bundle);
+
+        if (result !== Infinity) {
+          minBundles = Math.min(minBundles, result + 1);
+        }
+      }
+
+      return minBundles;
+    }
+
+    const totalBundles = solve(target);
+
+    if (totalBundles === Infinity) {
+      return res.status(200).json({
+        success: true,
+        possible: false,
+        message: "Not possible",
+        groupSize: target,
+        cinema: cinema.name,
+      });
+    }
+
+    let remaining = target;
+    let breakdown = [];
+
+    while (remaining > 0) {
+      for (let bundle of bundleSizes) {
+        if (
+          bundle <= remaining &&
+          solve(remaining - bundle) + 1 === solve(remaining)
+        ) {
+          let existing = breakdown.find((item) => item.size === bundle);
+
+          if (existing) {
+            existing.count++;
+          } else {
+            breakdown.push({
+              size: bundle,
+              count: 1,
+            });
+          }
+
+          remaining -= bundle;
+          break;
+        }
+      }
+    }
+
+    const totalSeats = breakdown.reduce(
+      (sum, item) => sum + item.size * item.count,
+      0
+    );
+
+    return res.status(200).json({
+      success: true,
+      possible: true,
+      groupSize: target,
+      cinema: cinema.name,
+      totalBundles,
+      totalSeats,
+      breakdown,
     });
   } catch (error) {
     return res.status(500).json({
